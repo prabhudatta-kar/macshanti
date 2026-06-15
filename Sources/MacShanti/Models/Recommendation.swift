@@ -49,7 +49,7 @@ enum RecommendationEngine {
                 id: "leak-\(leak.pid)",
                 kind: .restart,
                 title: "Restart \(leak.name)",
-                detail: "\(minutes) min of background CPU — possible leak. Restarting may free memory.",
+                detail: "Used \(minutes) min of CPU while in the background. Restarting may free memory.",
                 appName: leak.name,
                 pid: leak.pid,
                 actionLabel: "Quit"

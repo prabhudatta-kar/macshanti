@@ -37,7 +37,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         if let button = statusItem.button {
             button.target = self
             button.action = #selector(togglePopover)
-            button.toolTip = "MacShanti — memory pressure"
+            button.toolTip = "MacShanti memory monitor"
         }
     }
 

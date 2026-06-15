@@ -287,7 +287,7 @@ final class AlertManager: NSObject, UNUserNotificationCenterDelegate {
         content.categoryIdentifier = Self.summaryCategory
         content.title = "MacShanti daily summary"
         if result.hits == 0 {
-            content.body = "No swap pressure today — your memory stayed healthy. 🎉"
+            content.body = "No swap pressure today. Your memory stayed healthy. 🎉"
         } else {
             let apps = result.apps.isEmpty ? "various apps" : result.apps.joined(separator: ", ")
             content.body = "Swap was hit \(result.hits) time\(result.hits == 1 ? "" : "s") today, most often alongside: \(apps)."

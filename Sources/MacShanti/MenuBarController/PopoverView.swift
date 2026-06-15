@@ -103,7 +103,7 @@ struct PopoverView: View {
             Image(systemName: "chart.line.downtrend.xyaxis")
                 .foregroundStyle(.orange)
             if let mins = s.trend.headroomMinutes {
-                Text("Memory filling — about **\(mins) min** of headroom left. Act now to stay ahead.")
+                Text("Memory is filling up. About **\(mins) min** of headroom left.")
                     .font(.caption)
             } else {
                 Text("Memory is starting to fill up. Act now to stay ahead.")
@@ -118,7 +118,7 @@ struct PopoverView: View {
     private var healthyBanner: some View {
         HStack(spacing: 8) {
             Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
-            Text("Memory looks healthy — no action needed.")
+            Text("Memory looks healthy")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
