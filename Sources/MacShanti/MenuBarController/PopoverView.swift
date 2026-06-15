@@ -158,6 +158,13 @@ struct PopoverView: View {
 
     private var footer: some View {
         HStack {
+            Toggle("Open at login", isOn: Binding(
+                get: { LoginItemManager.isEnabled },
+                set: { LoginItemManager.set($0) }
+            ))
+            .toggleStyle(.checkbox)
+            .font(.caption)
+            .foregroundStyle(.secondary)
             Spacer()
             Button("Quit MacShanti", action: onQuitSelf)
                 .buttonStyle(.borderless)

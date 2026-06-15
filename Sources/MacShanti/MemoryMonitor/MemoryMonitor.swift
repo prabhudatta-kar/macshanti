@@ -57,9 +57,11 @@ final class MemoryMonitor {
     func collect() -> Snapshot {
         let agg = SystemMemory.aggregate()
         let processes = SystemMemory.processSamples()
-        let pressure = PressureLevel.classify(usedRatio: agg.totalBytes > 0
-                                                ? Double(agg.usedBytes) / Double(agg.totalBytes)
-                                                : 0,
+        let usedRatio = agg.totalBytes > 0 ? Double(agg.usedBytes) / Double(agg.totalBytes) : 0
+        let freeRatio = agg.totalBytes > 0 ? Double(agg.freeBytes) / Double(agg.totalBytes) : 0
+        let pressure = PressureLevel.classify(kernelPressureRaw: agg.kernelPressureRaw,
+                                              usedRatio: usedRatio,
+                                              freeRatio: freeRatio,
                                               swapUsedBytes: agg.swapUsedBytes)
         return Snapshot(
             timestamp: Date(),

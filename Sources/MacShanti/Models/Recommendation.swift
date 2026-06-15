@@ -33,6 +33,7 @@ enum RecommendationEngine {
                      leaks: [LeakDetector.LeakFlag],
                      session: SessionAnalyzer.SessionInfo?,
                      preferences: PreferenceStore,
+                     activity: ActivityTracker,
                      now: Date = Date()) -> [Recommendation] {
         var recs: [Recommendation] = []
         var handled = Set<String>()
@@ -52,28 +53,42 @@ enum RecommendationEngine {
             handled.insert(leak.name)
         }
 
-        // 2. Memory hogs — only worth surfacing under actual pressure, and only
-        //    for real apps (bundle id present) we can safely quit.
+        // 2. Reclaim memory from apps you're NOT using. Under pressure, rank
+        //    quit candidates by idle-time × memory (an LRU-style policy) so we
+        //    surface the heavy app you abandoned an hour ago — never the app
+        //    you're actively in (the frontmost app is excluded outright).
         if snapshot.pressure != .normal {
-            var quitCount = 0
-            for proc in snapshot.topProcesses(6) {
-                guard proc.bundleIdentifier != nil else { continue }
-                guard !handled.contains(proc.name) else { continue }
-                guard proc.rssMB >= minQuitMB else { continue }
-                guard !preferences.shouldSuppress(proc.name, now: now) else { continue }
+            let frontmost = snapshot.processes.first(where: { $0.isFrontmost })?.name
 
+            let scored = snapshot.processes
+                .filter { $0.bundleIdentifier != nil }       // real, quittable apps
+                .filter { $0.name != frontmost }             // never nag the active app
+                .filter { $0.rssMB >= minQuitMB }            // worth the bother
+                .filter { !handled.contains($0.name) }
+                .filter { !preferences.shouldSuppress($0.name, now: now) }
+                .map { proc -> (proc: ProcessSample, idleMin: Int, score: Double) in
+                    let idleMin = Int(activity.idleSeconds(for: proc.name, now: now) / 60)
+                    // Idle time amplifies the memory weight: a 300 MB app idle
+                    // 2h can outrank a 1 GB app you touched 5 min ago.
+                    let score = proc.rssMB * (1.0 + Double(idleMin) / 30.0)
+                    return (proc, idleMin, score)
+                }
+                .sorted { $0.score > $1.score }
+
+            for entry in scored.prefix(maxQuitSuggestions) {
+                let detail = entry.idleMin >= 5
+                    ? "Unused for \(formatDuration(entry.idleMin)) · frees about \(formatMB(entry.proc.rssMB))."
+                    : "Not in active use · frees about \(formatMB(entry.proc.rssMB))."
                 recs.append(Recommendation(
-                    id: "quit-\(proc.pid)",
+                    id: "quit-\(entry.proc.pid)",
                     kind: .quit,
-                    title: "Quit \(proc.name)",
-                    detail: "Frees about \(formatMB(proc.rssMB)).",
-                    appName: proc.name,
-                    pid: proc.pid,
+                    title: "Quit \(entry.proc.name)",
+                    detail: detail,
+                    appName: entry.proc.name,
+                    pid: entry.proc.pid,
                     actionLabel: "Quit"
                 ))
-                handled.insert(proc.name)
-                quitCount += 1
-                if quitCount >= maxQuitSuggestions { break }
+                handled.insert(entry.proc.name)
             }
         }
 
@@ -96,5 +111,13 @@ enum RecommendationEngine {
 
     static func formatMB(_ mb: Double) -> String {
         mb >= 1024 ? String(format: "%.1f GB", mb / 1024) : String(format: "%.0f MB", mb)
+    }
+
+    static func formatDuration(_ minutes: Int) -> String {
+        if minutes >= 60 {
+            let h = minutes / 60, m = minutes % 60
+            return m == 0 ? "\(h)h" : "\(h)h \(m)m"
+        }
+        return "\(minutes) min"
     }
 }

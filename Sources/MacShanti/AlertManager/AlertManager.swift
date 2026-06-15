@@ -20,8 +20,7 @@ final class AlertManager: NSObject, UNUserNotificationCenterDelegate {
     private static let dismissAction = "DISMISS"
     private static let restartLeakAction = "RESTART_LEAK"
 
-    /// Thresholds.
-    private let usedRatioThreshold = 0.75
+    /// Swap level counted as a "swap hit" for the daily summary.
     private let swapThresholdBytes: UInt64 = 1_073_741_824 // 1 GB
 
     private let database: AppDatabase
@@ -97,9 +96,10 @@ final class AlertManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func evaluatePressure(_ snapshot: Snapshot) {
-        let overRAM = snapshot.usedRatio >= usedRatioThreshold
-        let overSwap = snapshot.swapUsedBytes >= swapThresholdBytes
-        guard overRAM || overSwap else { return }
+        // Fire only on genuine, kernel-confirmed pressure — not merely because
+        // RAM is 75% full or swap exists (those are normal on macOS and were
+        // causing false alarms with gigabytes of free RAM).
+        guard snapshot.pressure == .critical else { return }
 
         if let last = lastPressureAlert, Date().timeIntervalSince(last) < pressureCooldown {
             return
@@ -115,9 +115,7 @@ final class AlertManager: NSObject, UNUserNotificationCenterDelegate {
         registerCategories(topAppName: primary.name)
 
         let names = topTwo.map { "\($0.name) (\(Int($0.rssMB)) MB)" }.joined(separator: " and ")
-        let reason = overSwap && !overRAM
-            ? "Swap usage is high (\(String(format: "%.1f", Double(snapshot.swapUsedBytes) / 1_073_741_824)) GB)."
-            : "RAM is \(Int(snapshot.usedRatio * 100))% full."
+        let reason = "Memory pressure is critical (RAM \(Int(snapshot.usedRatio * 100))% used, \(String(format: "%.1f", Double(snapshot.freeMB) / 1024)) GB free)."
 
         let content = UNMutableNotificationContent()
         content.title = "Memory pressure rising"

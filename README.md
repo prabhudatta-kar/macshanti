@@ -1,63 +1,133 @@
-# MacShanti
+# MacShanti 🧘
 
-A native macOS menubar app (Swift, SwiftUI, GRDB) that **proactively manages
-memory before the system slows down**. It samples system + per-process memory
-every 30 seconds, learns your usage patterns, and nudges you to free memory
-*before* you hit swap.
+**Peace of mind for your Mac's memory.**
 
-Targets **macOS 13+**.
+MacShanti is a tiny app that lives in your menu bar (the strip of icons at the
+top-right of your screen). It quietly keeps an eye on how much memory your Mac is
+using and gives you a gentle, colored heads-up *before* things get slow — plus
+one-click suggestions for which apps to close.
 
-## What it does
+No windows to manage, no Dock icon, no clutter. Just a little dot that turns
+green, yellow, or red.
 
-- **Menubar dot** — green / yellow / red based on live memory pressure.
-- **Popover** — total RAM used/free, swap used, and the top 5 memory-consuming
-  apps with their RAM in MB.
-- **Proactive alerts** — when RAM > 75% **or** swap > 1 GB, a notification names
-  the top 2 offenders with actions: **Quit [App]**, **Snooze 30 min**, **Dismiss**.
-- **Leak detection** — a process that burns > 60 min of CPU while never being
-  frontmost gets flagged as a possible leak, with a restart suggestion.
-- **Session learning** — app combinations seen 3+ times become named sessions
-  ("Coding", "Meetings", …). Under pressure during a known session, a one-time
-  nudge lists the non-session apps worth closing.
-- **Preferences** — per-app "never suggest" list; snoozing an app at the same
-  hour 2+ times auto-suppresses it at that hour.
-- **Daily summary** — at 8pm, a notification recaps how many times swap was hit
-  and which apps were involved.
+---
 
-## Architecture
+## What it does for you
 
-Clear separation across four subsystems, wired together in `AppDelegate`:
+- 🟢🟡🔴 **A color dot in your menu bar** tells you your memory health at a glance:
+  - **Green** — all good.
+  - **Yellow** — getting busy.
+  - **Red** — your Mac is genuinely under pressure.
+- 🖱️ **Click the dot** to see how much memory is used, how much is free, and the
+  **top 5 apps** eating your memory.
+- 💡 **Smart suggestions** — when memory is tight, it tells you which apps to
+  close to free up the most — and it's clever about it: it suggests apps you
+  **haven't used in a while**, not the one you're working in right now. Each
+  suggestion has a **Quit** button that does it for you.
+- 🔔 **Friendly alerts** — if memory gets critical, you get a notification naming
+  the biggest offenders, with **Quit**, **Snooze 30 min**, and **Dismiss**
+  buttons.
+- 🧠 **It learns your habits** — if you keep telling it to leave a certain app
+  alone, it stops nagging you about it.
+- 📊 **Daily recap** — each evening at 8pm it sends a short summary of how your
+  memory behaved that day.
 
-| Module | Responsibility | Key files |
-| --- | --- | --- |
-| **MemoryMonitor** | Data collection (`host_statistics64`, `proc_pidinfo`, `vm.swapusage`), 30s timer, SQLite persistence | `MemoryMonitor/SystemMemory.swift`, `MemoryMonitor/MemoryMonitor.swift` |
-| **SessionAnalyzer** | Pattern learning (sessions) + leak detection | `SessionAnalyzer/SessionAnalyzer.swift`, `SessionAnalyzer/LeakDetector.swift` |
-| **AlertManager** | `UNUserNotification` alerts, action handling, daily summary, preferences gating | `AlertManager/AlertManager.swift`, `AlertManager/PreferenceStore.swift` |
-| **MenuBarController** | `NSStatusItem` colored dot + SwiftUI popover | `MenuBarController/*.swift` |
+---
 
-Persistence is **GRDB** over SQLite (`Database/AppDatabase.swift`), with
-migrations and 14-day snapshot retention.
+## Installing it (about 2 minutes)
 
-## Build & run
+You'll need a Mac running **macOS 13 (Ventura) or newer** and Apple's free
+developer tools. If you've never installed those, just run this once and click
+**Install** when a box pops up:
 
 ```bash
-# Resolve deps and build
-swift build
-
-# Or assemble a proper .app bundle (recommended for notifications)
-./Scripts/make_app.sh release
-open build/MacShanti.app
+xcode-select --install
 ```
 
-On first launch macOS will prompt for **notification permission**. The app runs
-as an `LSUIElement` (menubar only — no Dock icon).
+Then install MacShanti:
 
-## Notes & caveats
+**1. Download the app.** Open the **Terminal** app and paste these two lines:
 
-- `proc_pidinfo` only returns task info for processes the current user can
-  inspect; system/root processes may be skipped. RSS is real resident size.
-- Per-process CPU time comes from `proc_taskinfo` (user + system, nanoseconds).
-- Reliable `UNUserNotification` delivery (and the Quit-app action) works best
-  from a code-signed `.app` bundle; `Scripts/make_app.sh` ad-hoc signs one.
-- For App Store / hardened-runtime distribution you'd wrap this SPM package in
-  an Xcode app target; the module layout here drops in unchanged.
+```bash
+git clone https://github.com/prabhudatta-kar/macshanti.git
+cd macshanti
+```
+
+**2. Build it and move it to your Applications folder:**
+
+```bash
+./Scripts/make_app.sh release
+cp -R build/MacShanti.app /Applications/
+```
+
+**3. Open it:**
+
+```bash
+open /Applications/MacShanti.app
+```
+
+That's it! A colored dot appears in your menu bar.
+
+The first time it opens, macOS will ask:
+- **"MacShanti would like to send you notifications"** → click **Allow** (this is
+  how you get the helpful alerts).
+- It also sets itself to **open automatically when you log in**, so you never
+  have to think about it again. (You can turn this off anytime — see below.)
+
+---
+
+## Using it
+
+- **Check your memory:** click the dot. The popover shows everything.
+- **Free up memory:** under "Recommended actions," click **Quit** next to any
+  app you don't need right now.
+- **Tell it to leave an app alone:** right-click any app in the list and choose
+  **"Never suggest …"**. It'll stop recommending that app.
+- **Snooze an alert:** when a notification appears, click **Snooze 30 min**. If
+  you snooze the same app at the same time of day a couple of times, MacShanti
+  takes the hint and stops bothering you then.
+- **Turn off "open at login":** click the dot and uncheck **Open at login** at
+  the bottom of the popover.
+- **Quit the app:** click the dot → **Quit MacShanti**.
+
+---
+
+## A couple of common questions
+
+**"My swap says 4 GB but the dot is green — is that a problem?"**
+Nope! macOS parks unused memory on your disk ("swap") and leaves it there even
+after it's no longer needed. As long as you have free memory and your Mac feels
+responsive, that's completely normal. MacShanti only turns red when your Mac is
+*actually* under pressure — the same signal Activity Monitor uses.
+
+**"Does it slow down my Mac?"**
+No. It takes a quick measurement every 30 seconds and otherwise sleeps. Its own
+memory use is tiny.
+
+**"Where's my data going?"**
+Nowhere. Everything stays on your Mac in a small local file. MacShanti has no
+internet connection and sends nothing anywhere.
+
+---
+
+## Updating later
+
+To get the newest version:
+
+```bash
+cd macshanti
+git pull
+./Scripts/make_app.sh release
+cp -R build/MacShanti.app /Applications/
+open /Applications/MacShanti.app
+```
+
+---
+
+## For developers
+
+Want to understand how it works or build on top of it? See
+**[Developer Notes →](DEVELOPERS.md)**.
+
+Built with Swift, SwiftUI, and [GRDB](https://github.com/groue/GRDB.swift).
+Targets macOS 13+.

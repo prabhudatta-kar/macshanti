@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var alertManager: AlertManager!
     private var menuBarController: MenuBarController!
     private var preferences: PreferenceStore!
+    private var activityTracker: ActivityTracker!
     private let state = MonitorState()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -23,7 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             database = AppDatabase.makeInMemory()
         }
 
+        // Enable "open at login" by default on the first ever launch.
+        LoginItemManager.configureOnFirstLaunch()
+
         preferences = PreferenceStore(database: database)
+        activityTracker = ActivityTracker()
 
         sessionAnalyzer = SessionAnalyzer(database: database)
         leakDetector = LeakDetector()
@@ -41,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         monitor.onSnapshot = { [weak self] snapshot in
             guard let self else { return }
             // Feed the analysis pipeline.
+            self.activityTracker.update(snapshot: snapshot)
             self.sessionAnalyzer.record(snapshot: snapshot)
             let newLeaks = self.leakDetector.evaluate(snapshot: snapshot)
 
@@ -49,7 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 snapshot: snapshot,
                 leaks: self.leakDetector.currentLeakFlags(),
                 session: self.sessionAnalyzer.currentSessionInfo(for: snapshot),
-                preferences: self.preferences
+                preferences: self.preferences,
+                activity: self.activityTracker
             )
             self.state.update(snapshot: snapshot, recommendations: recommendations)
 

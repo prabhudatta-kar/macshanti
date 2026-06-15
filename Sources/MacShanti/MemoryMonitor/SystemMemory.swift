@@ -17,6 +17,8 @@ enum SystemMemory {
         let freeBytes: UInt64
         let swapUsedBytes: UInt64
         let swapTotalBytes: UInt64
+        /// `kern.memorystatus_vm_pressure_level`: 1 = normal, 2 = warning, 4 = critical.
+        let kernelPressureRaw: Int32
     }
 
     static func aggregate() -> Aggregate {
@@ -54,7 +56,19 @@ enum SystemMemory {
                          usedBytes: min(used, total),
                          freeBytes: free,
                          swapUsedBytes: swap.used,
-                         swapTotalBytes: swap.total)
+                         swapTotalBytes: swap.total,
+                         kernelPressureRaw: kernelPressureLevel())
+    }
+
+    /// The kernel's live memory-pressure verdict — the same signal behind
+    /// Activity Monitor's memory-pressure graph. Defaults to "normal" (1) if the
+    /// sysctl is unavailable.
+    private static func kernelPressureLevel() -> Int32 {
+        var level: Int32 = 0
+        var size = MemoryLayout<Int32>.stride
+        let result = sysctlbyname("kern.memorystatus_vm_pressure_level", &level, &size, nil, 0)
+        guard result == 0, level != 0 else { return 1 }
+        return level
     }
 
     private static func machPageSize() -> UInt64 {
@@ -93,7 +107,7 @@ enum SystemMemory {
         samples.reserveCapacity(pids.count)
 
         for pid in pids where pid > 0 {
-            guard var info = taskInfo(for: pid) else { continue }
+            guard let info = taskInfo(for: pid) else { continue }
 
             let rss = UInt64(info.pti_resident_size)
             // pti_total_user / pti_total_system are in nanoseconds.
@@ -111,7 +125,6 @@ enum SystemMemory {
                 cpuTimeSeconds: cpuSeconds,
                 isFrontmost: pid == frontPID
             ))
-            _ = info // silence unused mutation warning on some toolchains
         }
         return samples
     }
