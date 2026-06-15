@@ -96,10 +96,17 @@ final class AlertManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func evaluatePressure(_ snapshot: Snapshot) {
-        // Fire only on genuine, kernel-confirmed pressure — not merely because
-        // RAM is 75% full or swap exists (those are normal on macOS and were
-        // causing false alarms with gigabytes of free RAM).
-        guard snapshot.pressure == .critical else { return }
+        // Decide the tier. Critical = already in trouble (kernel-confirmed).
+        // Predictive = trend says we're heading there — fire *before* the kernel
+        // reacts, which is the whole point of MacShanti.
+        let tier: Tier
+        if snapshot.pressure == .critical {
+            tier = .critical
+        } else if snapshot.trend.isEarlyWarning {
+            tier = .predictive
+        } else {
+            return
+        }
 
         if let last = lastPressureAlert, Date().timeIntervalSince(last) < pressureCooldown {
             return
@@ -115,19 +122,30 @@ final class AlertManager: NSObject, UNUserNotificationCenterDelegate {
         registerCategories(topAppName: primary.name)
 
         let names = topTwo.map { "\($0.name) (\(Int($0.rssMB)) MB)" }.joined(separator: " and ")
-        let reason = "Memory pressure is critical (RAM \(Int(snapshot.usedRatio * 100))% used, \(String(format: "%.1f", Double(snapshot.freeMB) / 1024)) GB free)."
-
         let content = UNMutableNotificationContent()
-        content.title = "Memory pressure rising"
-        content.body = "\(reason) Biggest consumers: \(names). Consider quitting one."
         content.categoryIdentifier = Self.pressureCategory
         content.sound = .default
         content.userInfo = [
             "primaryPID": Int(primary.pid),
             "primaryName": primary.name
         ]
+
+        switch tier {
+        case .critical:
+            content.title = "Memory pressure is high"
+            let reason = "RAM \(Int(snapshot.usedRatio * 100))% used, \(String(format: "%.1f", Double(snapshot.freeMB) / 1024)) GB free."
+            content.body = "\(reason) Biggest consumers: \(names). Consider quitting one."
+        case .predictive:
+            content.title = "Memory is filling up"
+            let headroom = snapshot.trend.headroomMinutes.map { "about \($0) min of headroom left" }
+                ?? "running low soon"
+            content.body = "At the current rate you have \(headroom). Quitting \(names) now keeps you ahead."
+        }
+
         post(content, id: "pressure")
     }
+
+    private enum Tier { case predictive, critical }
 
     private func notifyLeak(_ leak: LeakDetector.LeakFlag) {
         guard !preferences.shouldSuppress(leak.name) else { return }

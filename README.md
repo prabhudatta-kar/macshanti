@@ -24,9 +24,13 @@ green, yellow, or red.
   close to free up the most — and it's clever about it: it suggests apps you
   **haven't used in a while**, not the one you're working in right now. Each
   suggestion has a **Quit** button that does it for you.
-- 🔔 **Friendly alerts** — if memory gets critical, you get a notification naming
-  the biggest offenders, with **Quit**, **Snooze 30 min**, and **Dismiss**
-  buttons.
+- 🔮 **Heads-up *before* trouble** — MacShanti watches the trend of your free
+  memory. If it's filling up fast, the dot turns yellow and warns you *early*
+  ("about 5 min of headroom left — close an idle app now"), so you can prevent a
+  slowdown instead of reacting to one.
+- 🔔 **Friendly alerts** — when memory gets critical, you get a notification
+  naming the biggest offenders, with **Quit**, **Snooze 30 min**, and
+  **Dismiss** buttons.
 - 🧠 **It learns your habits** — if you keep telling it to leave a certain app
   alone, it stops nagging you about it.
 - 📊 **Daily recap** — each evening at 8pm it sends a short summary of how your

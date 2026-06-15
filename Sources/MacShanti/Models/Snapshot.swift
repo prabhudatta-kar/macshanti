@@ -14,6 +14,26 @@ struct ProcessSample: Identifiable, Equatable, Codable {
     var rssMB: Double { Double(rssBytes) / 1_048_576.0 }
 }
 
+/// Predictive trend signal derived from recent snapshots — lets us warn
+/// *before* the kernel reports pressure.
+struct TrendInfo: Equatable {
+    /// True when free RAM is projected to hit the danger floor within the
+    /// lead-time window, or the system has started actively swapping.
+    var isEarlyWarning: Bool = false
+    /// Projected seconds until free RAM reaches the danger floor (nil if not declining).
+    var secondsToFloor: Double? = nil
+    /// Rate of change of free RAM (bytes/sec); negative = filling up.
+    var freeSlopeBytesPerSec: Double = 0
+    /// True if the system is actively swapping pages out right now.
+    var swappingNow: Bool = false
+
+    /// Headroom in whole minutes, for display.
+    var headroomMinutes: Int? {
+        guard let s = secondsToFloor, s.isFinite else { return nil }
+        return max(0, Int(s / 60))
+    }
+}
+
 /// A full system snapshot: aggregate memory + the per-process breakdown.
 /// This is the value type passed through the pipeline (not the DB record).
 struct Snapshot: Equatable {
@@ -24,6 +44,7 @@ struct Snapshot: Equatable {
     let swapUsedBytes: UInt64
     let swapTotalBytes: UInt64
     let pressure: PressureLevel
+    var trend: TrendInfo = TrendInfo()
     let processes: [ProcessSample]
 
     var usedRatio: Double {

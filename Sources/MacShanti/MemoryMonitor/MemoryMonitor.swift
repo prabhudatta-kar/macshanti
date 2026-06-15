@@ -13,6 +13,7 @@ final class MemoryMonitor {
     private let queue = DispatchQueue(label: "com.macshanti.monitor", qos: .utility)
     private var timer: DispatchSourceTimer?
     private var tickCount = 0
+    private let trendAnalyzer = TrendAnalyzer()
 
     init(database: AppDatabase, interval: TimeInterval = 30) {
         self.database = database
@@ -55,22 +56,33 @@ final class MemoryMonitor {
 
     /// Build a `Snapshot` value type from the current system state.
     func collect() -> Snapshot {
+        let now = Date()
         let agg = SystemMemory.aggregate()
         let processes = SystemMemory.processSamples()
         let usedRatio = agg.totalBytes > 0 ? Double(agg.usedBytes) / Double(agg.totalBytes) : 0
         let freeRatio = agg.totalBytes > 0 ? Double(agg.freeBytes) / Double(agg.totalBytes) : 0
-        let pressure = PressureLevel.classify(kernelPressureRaw: agg.kernelPressureRaw,
+
+        // Reactive baseline (kernel + low-RAM safety net)…
+        let baseline = PressureLevel.classify(kernelPressureRaw: agg.kernelPressureRaw,
                                               usedRatio: usedRatio,
                                               freeRatio: freeRatio,
                                               swapUsedBytes: agg.swapUsedBytes)
+        // …escalated by the *predictive* trend so we go yellow before trouble.
+        let trend = trendAnalyzer.update(freeBytes: agg.freeBytes,
+                                         totalBytes: agg.totalBytes,
+                                         reclaimCumulative: agg.reclaimEventsCumulative,
+                                         now: now)
+        let pressure = max(baseline, trend.isEarlyWarning ? .warning : .normal)
+
         return Snapshot(
-            timestamp: Date(),
+            timestamp: now,
             totalBytes: agg.totalBytes,
             usedBytes: agg.usedBytes,
             freeBytes: agg.freeBytes,
             swapUsedBytes: agg.swapUsedBytes,
             swapTotalBytes: agg.swapTotalBytes,
             pressure: pressure,
+            trend: trend,
             // Keep only the top 40 consumers in the DB to bound row growth.
             processes: processes.sorted { $0.rssBytes > $1.rssBytes }
         )

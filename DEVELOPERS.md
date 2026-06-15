@@ -62,6 +62,7 @@ marshalled to the main queue before publishing.
 | --- | --- |
 | `MemoryMonitor/SystemMemory.swift` | All low-level syscalls (see below). Pure, stateless. |
 | `MemoryMonitor/MemoryMonitor.swift` | 30s `DispatchSourceTimer`, builds `Snapshot`, persists, fires `onSnapshot`. `refresh()` forces an off-schedule sample. |
+| `MemoryMonitor/TrendAnalyzer.swift` | Rolling-window free-RAM slope + reclaim-rate → predictive early-warning. In-memory. |
 | `SessionAnalyzer/SessionAnalyzer.swift` | Learns app co-occurrence → named "sessions". |
 | `SessionAnalyzer/ActivityTracker.swift` | Per-app recency (last time frontmost) for the LRU policy. In-memory. |
 | `SessionAnalyzer/LeakDetector.swift` | Accumulates background CPU per pid; flags > 60 min. In-memory. |
@@ -99,16 +100,41 @@ All in `SystemMemory.swift`:
 
 ## Pressure classification
 
+The final dot color is `max(reactiveBaseline, predictiveEscalation)`.
+
+**Reactive baseline** —
 `PressureLevel.classify(kernelPressureRaw:usedRatio:freeRatio:swapUsedBytes:)`:
 
-1. Start from the **kernel pressure level** (the authoritative signal).
+1. Start from the **kernel pressure level** (the authoritative "are we in
+   trouble now" signal).
 2. **Escalate only when free RAM is scarce** (`freeRatio < 0.10`): high swap or
    high RAM fill are ignored while RAM is plentiful, because macOS retains
    swapped-out pages indefinitely — absolute swap size is *not* a live-pressure
    signal. This is why 4 GB of swap with 6 GB free reads green.
 
-`AlertManager` fires the proactive pressure notification only when
-`snapshot.pressure == .critical`, keeping notifications aligned with the dot.
+**Predictive escalation** (`TrendAnalyzer`, `MemoryMonitor/TrendAnalyzer.swift`)
+— this is what makes MacShanti *preventive* rather than reactive, since the
+kernel signal is lagging by definition. Over a rolling ~6-min window it:
+
+1. Fits the **least-squares slope of free RAM** and projects the time until free
+   RAM reaches the danger floor (10% of total). If that ETA is within the lead
+   window (5 min) *and* free RAM is already in the "watch zone" (< 30%) *and* the
+   decline is sustained (≥ 4 samples, not rising on the latest step) → **early
+   warning** → dot goes yellow.
+2. Corroborates with the **rate of swap-outs + compressions** (`vm_statistics64`
+   cumulative counters): active swapping while free RAM < 20% also raises the
+   flag.
+3. **De-escalates immediately** when free RAM ticks back up (e.g. you closed a
+   tab) — calm on the way up, responsive on the way down.
+
+Tunables (window, lead time, watch-zone ceiling, floor, sustain count, swap-rate
+threshold) are constants at the top of `TrendAnalyzer`; current values are the
+"Balanced" profile. The verdict is carried on `Snapshot.trend` (`TrendInfo`).
+
+`AlertManager` fires on two tiers (shared 10-min cooldown): **critical** when
+`snapshot.pressure == .critical`, or **predictive** when
+`snapshot.trend.isEarlyWarning` — the predictive notification quotes the
+projected headroom in minutes.
 
 ---
 
@@ -161,9 +187,11 @@ relaunch — a deliberate simplification (a freshly launched app shouldn't look
 - **Persist idle & leak state** across restarts (currently in-memory).
 - **Fuzzy session matching** — `SessionAnalyzer` requires an *exact* app-set
   match; Jaccard similarity would generalize better.
-- **Trend-based prediction** — alert when usage is climbing fast, before the
-  kernel reports critical.
+- **Per-app growth attribution** — name the app whose RSS is climbing fastest in
+  the predictive warning (`TrendAnalyzer` could track per-app slopes too).
 - **Per-app leak baselines** instead of one global 60-min threshold.
+- **Expose the sensitivity profile** (Balanced/Early/Conservative) as a user
+  setting instead of compile-time constants in `TrendAnalyzer`.
 - **Preferences window** — manage the never-suggest list, thresholds, and
   cadence from a real settings UI (today it's popover context-menus + a DB).
 - **Charts** — the snapshot history in SQLite is ready to graph.

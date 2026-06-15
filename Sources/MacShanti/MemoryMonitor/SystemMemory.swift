@@ -19,6 +19,9 @@ enum SystemMemory {
         let swapTotalBytes: UInt64
         /// `kern.memorystatus_vm_pressure_level`: 1 = normal, 2 = warning, 4 = critical.
         let kernelPressureRaw: Int32
+        /// Cumulative count of pages swapped out + compressed — the *rate* of
+        /// change is an early sign the system has started reclaiming memory.
+        let reclaimEventsCumulative: UInt64
     }
 
     static func aggregate() -> Aggregate {
@@ -37,6 +40,7 @@ enum SystemMemory {
 
         var used: UInt64 = 0
         var free: UInt64 = 0
+        var reclaim: UInt64 = 0
         if kr == KERN_SUCCESS {
             // "App memory" + wired + compressed approximates the macOS notion of
             // memory in use; inactive/free/speculative pages are reclaimable.
@@ -45,6 +49,8 @@ enum SystemMemory {
             let compressed = UInt64(stats.compressor_page_count) * pageSize
             free = UInt64(stats.free_count + stats.inactive_count) * pageSize
             used = active + wired + compressed
+            // Cumulative reclaim work: pages swapped out + pages compressed.
+            reclaim = stats.swapouts &+ stats.compressions
         } else {
             // Conservative fallback.
             free = 0
@@ -57,7 +63,8 @@ enum SystemMemory {
                          freeBytes: free,
                          swapUsedBytes: swap.used,
                          swapTotalBytes: swap.total,
-                         kernelPressureRaw: kernelPressureLevel())
+                         kernelPressureRaw: kernelPressureLevel(),
+                         reclaimEventsCumulative: reclaim)
     }
 
     /// The kernel's live memory-pressure verdict — the same signal behind

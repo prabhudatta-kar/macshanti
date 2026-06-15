@@ -14,6 +14,9 @@ struct PopoverView: View {
             header
             Divider()
             if let snapshot = state.snapshot {
+                if snapshot.trend.isEarlyWarning {
+                    predictiveBanner(snapshot)
+                }
                 if !state.recommendations.isEmpty {
                     recommendations
                     Divider()
@@ -93,6 +96,23 @@ struct PopoverView: View {
                 Button("Never suggest \(name)") { onNeverSuggest(name) }
             }
         }
+    }
+
+    private func predictiveBanner(_ s: Snapshot) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chart.line.downtrend.xyaxis")
+                .foregroundStyle(.orange)
+            if let mins = s.trend.headroomMinutes {
+                Text("Memory filling — about **\(mins) min** of headroom left. Act now to stay ahead.")
+                    .font(.caption)
+            } else {
+                Text("Memory is starting to fill up. Act now to stay ahead.")
+                    .font(.caption)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
     }
 
     private var healthyBanner: some View {
