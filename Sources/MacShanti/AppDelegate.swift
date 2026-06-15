@@ -60,9 +60,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             self.state.update(snapshot: snapshot, recommendations: recommendations)
 
-            // Proactive notifications (use newly-flagged leaks + one-time nudge).
+            // Proactive notifications. Pass the same idle-aware recommendations
+            // the popover shows so the alert names the same apps.
             self.alertManager.evaluate(
                 snapshot: snapshot,
+                recommendations: recommendations,
                 leaks: newLeaks,
                 session: self.sessionAnalyzer.currentSessionNudge(for: snapshot)
             )

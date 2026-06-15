@@ -88,14 +88,15 @@ final class AlertManager: NSObject, UNUserNotificationCenterDelegate {
 
     /// Called after each snapshot. Fires whichever alerts are warranted.
     func evaluate(snapshot: Snapshot,
+                  recommendations: [Recommendation],
                   leaks: [LeakDetector.LeakFlag],
                   session: SessionAnalyzer.SessionNudge?) {
-        evaluatePressure(snapshot)
+        evaluatePressure(snapshot, recommendations: recommendations)
         for leak in leaks { notifyLeak(leak) }
         if let session { notifySession(session) }
     }
 
-    private func evaluatePressure(_ snapshot: Snapshot) {
+    private func evaluatePressure(_ snapshot: Snapshot, recommendations: [Recommendation]) {
         // Decide the tier. Critical = already in trouble (kernel-confirmed).
         // Predictive = trend says we're heading there — fire *before* the kernel
         // reacts, which is the whole point of MacShanti.
@@ -112,22 +113,37 @@ final class AlertManager: NSObject, UNUserNotificationCenterDelegate {
             return
         }
 
-        // Top consumers that aren't suppressed by user preferences.
-        let candidates = snapshot.topProcesses(5)
-            .filter { !preferences.shouldSuppress($0.name) }
-        let topTwo = Array(candidates.prefix(2))
-        guard let primary = topTwo.first else { return }
+        // Prefer the same idle-aware apps the popover recommends quitting; fall
+        // back to raw top consumers only if there are no actionable recs.
+        let primaryName: String
+        let primaryPID: Int32
+        let names: String
+
+        let actionable = recommendations.filter {
+            ($0.kind == .quit || $0.kind == .restart) && $0.pid != nil && $0.appName != nil
+        }
+        if let first = actionable.first {
+            primaryName = first.appName!
+            primaryPID = first.pid!
+            names = actionable.prefix(2).map(Self.describe).joined(separator: " and ")
+        } else {
+            let candidates = snapshot.topProcesses(5)
+                .filter { !preferences.shouldSuppress($0.name) }
+            guard let primary = candidates.first else { return }
+            primaryName = primary.name
+            primaryPID = primary.pid
+            names = candidates.prefix(2).map { "\($0.name) (\(Int($0.rssMB)) MB)" }.joined(separator: " and ")
+        }
 
         lastPressureAlert = Date()
-        registerCategories(topAppName: primary.name)
+        registerCategories(topAppName: primaryName)
 
-        let names = topTwo.map { "\($0.name) (\(Int($0.rssMB)) MB)" }.joined(separator: " and ")
         let content = UNMutableNotificationContent()
         content.categoryIdentifier = Self.pressureCategory
         content.sound = .default
         content.userInfo = [
-            "primaryPID": Int(primary.pid),
-            "primaryName": primary.name
+            "primaryPID": Int(primaryPID),
+            "primaryName": primaryName
         ]
 
         switch tier {
@@ -146,6 +162,24 @@ final class AlertManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private enum Tier { case predictive, critical }
+
+    /// Idle-aware phrasing for a recommended app, e.g.
+    /// "Slack (idle 1h 20m, ~850 MB)" — matches what the popover shows.
+    private static func describe(_ rec: Recommendation) -> String {
+        let name = rec.appName ?? "an app"
+        let mem = rec.estimatedFreeMB.map { RecommendationEngine.formatMB($0) }
+        if let idle = rec.idleMinutes, idle >= 5 {
+            let memPart = mem.map { ", ~\($0)" } ?? ""
+            return "\(name) (idle \(RecommendationEngine.formatDuration(idle))\(memPart))"
+        }
+        if rec.kind == .restart {
+            return "\(name) (possible leak)"
+        }
+        if let mem {
+            return "\(name) (~\(mem))"
+        }
+        return name
+    }
 
     private func notifyLeak(_ leak: LeakDetector.LeakFlag) {
         guard !preferences.shouldSuppress(leak.name) else { return }

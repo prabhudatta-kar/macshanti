@@ -18,6 +18,10 @@ struct Recommendation: Identifiable, Equatable {
     let pid: Int32?
     /// Button label, e.g. "Quit". nil ⇒ advisory row with no button.
     let actionLabel: String?
+    /// Approximate memory this would free (MB), for notification phrasing.
+    var estimatedFreeMB: Double? = nil
+    /// Minutes the app has been idle (unused), for notification phrasing.
+    var idleMinutes: Int? = nil
 }
 
 /// Builds the ranked recommendation list shown in the popover from the latest
@@ -86,7 +90,9 @@ enum RecommendationEngine {
                     detail: detail,
                     appName: entry.proc.name,
                     pid: entry.proc.pid,
-                    actionLabel: "Quit"
+                    actionLabel: "Quit",
+                    estimatedFreeMB: entry.proc.rssMB,
+                    idleMinutes: entry.idleMin
                 ))
                 handled.insert(entry.proc.name)
             }
