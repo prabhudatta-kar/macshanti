@@ -1,5 +1,10 @@
 # MacShanti 🧘
 
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Platform: macOS 13+](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey.svg)
+![Swift 5.9](https://img.shields.io/badge/swift-5.9-orange.svg)
+![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
+
 **Peace of mind for your Mac's memory.**
 
 MacShanti is a tiny app that lives in your menu bar (the strip of icons at the
@@ -9,6 +14,15 @@ one-click suggestions for which apps to close.
 
 No windows to manage, no Dock icon, no clutter. Just a little dot that turns
 green, yellow, or red.
+
+---
+
+## What it looks like
+
+<!--
+TODO: add a real screenshot at docs/screenshot.png, then uncomment the line below.
+![MacShanti in the menu bar](docs/screenshot.png)
+-->
 
 ---
 
@@ -125,6 +139,13 @@ git pull
 cp -R build/MacShanti.app /Applications/
 open /Applications/MacShanti.app
 ```
+
+---
+
+## Contributing
+
+Issues and pull requests are welcome! See **[CONTRIBUTING.md](CONTRIBUTING.md)**
+for how to report a bug, suggest an idea, or send a change.
 
 ---
 
