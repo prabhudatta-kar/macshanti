@@ -64,7 +64,7 @@ marshalled to the main queue before publishing.
 | `MemoryMonitor/MemoryMonitor.swift` | 30s `DispatchSourceTimer`, builds `Snapshot`, persists, fires `onSnapshot`. `refresh()` forces an off-schedule sample. |
 | `MemoryMonitor/TrendAnalyzer.swift` | Rolling-window free-RAM slope + reclaim-rate → predictive early-warning. In-memory. |
 | `SessionAnalyzer/SessionAnalyzer.swift` | Learns app co-occurrence → named "sessions". |
-| `SessionAnalyzer/ActivityTracker.swift` | Per-app recency (last time frontmost) for the LRU policy. In-memory. |
+| `SessionAnalyzer/ActivityTracker.swift` | Per-app recency for the LRU policy via `NSWorkspace` activation events, with the 30s snapshot as backstop. In-memory. |
 | `SessionAnalyzer/LeakDetector.swift` | Accumulates background CPU per pid; flags > 60 min. In-memory. |
 | `AlertManager/AlertManager.swift` | All notifications + actions + daily 8pm summary. `UNUserNotificationCenterDelegate`. |
 | `AlertManager/PreferenceStore.swift` | "Never suggest" list + snooze / time-based suppression. |
@@ -202,8 +202,9 @@ relaunch — a deliberate simplification (a freshly launched app shouldn't look
 
 - `proc_pidinfo` only returns task info for processes the current user can
   inspect; some system/root processes are skipped.
-- "Last used" = last time the app was *frontmost*. A background media player you
-  actively listen to will look idle — handle via "Never suggest".
+- "Last used" is tracked from real app-activation events (`NSWorkspace`) plus
+  the 30s snapshot as a backstop. A background media player you actively listen
+  to will still look idle — handle via "Never suggest".
 - Reliable notifications + the login item need a code-signed `.app` bundle
   (`make_app.sh` ad-hoc signs one). For distribution outside your own machine,
   wrap this package in an Xcode target with a Developer ID + hardened runtime;
