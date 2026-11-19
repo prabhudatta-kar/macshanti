@@ -71,6 +71,7 @@ marshalled to the main queue before publishing.
 | `MenuBarController/MenuBarController.swift` | `NSStatusItem` dot + `NSPopover`; owns popover actions (quit app, never-suggest). |
 | `MenuBarController/PopoverView.swift` | SwiftUI popover UI. |
 | `MenuBarController/MonitorState.swift` | `ObservableObject` bridging monitor → SwiftUI. |
+| `Updater/UpdateChecker.swift` | Checks GitHub Releases for a newer version, downloads `MacShanti.zip`, swaps the installed `.app`, relaunches. See “Releasing” below. |
 | `Services/LoginItemManager.swift` | `SMAppService` login-item registration. |
 | `Models/*` | Value types (`Snapshot`, `ProcessSample`, `PressureLevel`, `Recommendation`) + GRDB records. |
 
@@ -179,6 +180,39 @@ Snapshots older than 14 days are pruned (`pruneSnapshots`, ~hourly).
 `ActivityTracker` and `LeakDetector` state are **in-memory only** and reset on
 relaunch — a deliberate simplification (a freshly launched app shouldn't look
 "idle"). Persisting them is a natural enhancement.
+
+---
+
+## Releasing
+
+`Scripts/make_release.sh X.Y.Z` cuts a release end to end:
+
+1. Bumps `CFBundleShortVersionString` (and `CFBundleVersion`) in `Info.plist`.
+2. Builds the release `.app` via `make_app.sh`.
+3. Zips it to `build/MacShanti.zip` with `ditto -c -k --keepParent`.
+4. Commits the version bump, tags `vX.Y.Z`, pushes both.
+5. Publishes a GitHub Release with the zip attached (`gh release create`).
+
+The in-app updater (`Updater/UpdateChecker.swift`) is the consumer:
+
+- It polls `GET /repos/prabhudatta-kar/macshanti/releases/latest` on launch
+  and every 24h, and compares the tag numerically against the running
+  bundle's version. A 404 (no releases yet) reads as "up to date".
+- The release asset **must be named exactly `MacShanti.zip`** — that name is
+  the contract between `make_release.sh` and `UpdateChecker`.
+- The zip is downloaded with `URLSession`, so macOS attaches no quarantine
+  xattr and the ad-hoc signed replacement launches cleanly.
+- Install moves the running `.app` aside (legal on macOS), moves the new one
+  in, verifies its plist version matches the tag, and relaunches via a
+  detached helper script that waits for the old process to exit. A failed
+  swap rolls the old bundle back.
+- If the app isn't running from a writable `.app` bundle (e.g. `swift run`
+  from a checkout), the updater declines and points at the manual path.
+
+No Sparkle: the app is ad-hoc signed and has no Developer ID, so Sparkle's
+EdDSA signing + appcast machinery would add moving parts without adding real
+security here. The version sanity check above keeps a stale or mismatched
+asset from silently replacing the app.
 
 ---
 
