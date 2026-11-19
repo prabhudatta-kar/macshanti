@@ -123,14 +123,21 @@ No. It takes a quick measurement every 30 seconds and otherwise sleeps. Its own
 memory use is tiny.
 
 **"Where's my data going?"**
-Nowhere. Everything stays on your Mac in a small local file. MacShanti has no
-internet connection and sends nothing anywhere.
+Nowhere. Your memory data stays on your Mac in a small local file. The only
+network call MacShanti ever makes is asking GitHub whether a newer version of
+the app exists — it sends nothing about you or your Mac.
 
 ---
 
 ## Updating later
 
-To get the newest version:
+MacShanti checks GitHub for a new release when it launches and once a day
+after that. When one is available, an **Update** button appears at the bottom
+of the popover — click it and MacShanti downloads the new version, installs
+it, and relaunches itself. You can also click **Check for Updates…** in the
+popover anytime.
+
+Prefer the terminal? The manual path still works:
 
 ```bash
 cd macshanti

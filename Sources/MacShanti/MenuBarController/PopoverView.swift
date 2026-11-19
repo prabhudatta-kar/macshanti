@@ -5,6 +5,7 @@ import SwiftUI
 /// of the top 5 memory-consuming apps.
 struct PopoverView: View {
     @ObservedObject var state: MonitorState
+    @ObservedObject var updateChecker: UpdateChecker
     var onQuitApp: (Int32) -> Void
     var onNeverSuggest: (String) -> Void
     var onQuitSelf: () -> Void
@@ -34,6 +35,7 @@ struct PopoverView: View {
                     .padding(.vertical, 20)
             }
             Divider()
+            updateSection
             footer
         }
         .padding(14)
@@ -176,6 +178,58 @@ struct PopoverView: View {
         }
     }
 
+    // MARK: - Updates
+
+    @ViewBuilder
+    private var updateSection: some View {
+        switch updateChecker.status {
+        case .available(let version):
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(.blue)
+                Text("Version **\(version)** is available.")
+                    .font(.caption)
+                Spacer(minLength: 0)
+                Button("Update") { updateChecker.installAvailableUpdate() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+            .padding(8)
+            .background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        case .downloading:
+            updateStatusRow("Downloading update…", busy: true)
+        case .installing:
+            updateStatusRow("Installing. MacShanti will relaunch.", busy: true)
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Try again") { updateChecker.check() }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+            }
+        case .upToDate:
+            updateStatusRow("MacShanti is up to date (v\(updateChecker.currentVersion)).", busy: false)
+        case .idle, .checking:
+            EmptyView()
+        }
+    }
+
+    private func updateStatusRow(_ text: String, busy: Bool) -> some View {
+        HStack(spacing: 8) {
+            if busy {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+    }
+
     private var footer: some View {
         HStack {
             Toggle("Open at login", isOn: Binding(
@@ -186,6 +240,14 @@ struct PopoverView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             Spacer()
+            if case .checking = updateChecker.status {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Button("Check for Updates…") { updateChecker.check() }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+            }
             Button("Quit MacShanti", action: onQuitSelf)
                 .buttonStyle(.borderless)
                 .font(.caption)

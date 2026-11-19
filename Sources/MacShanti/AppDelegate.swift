@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController!
     private var preferences: PreferenceStore!
     private var activityTracker: ActivityTracker!
+    private let updateChecker = UpdateChecker()
     private let state = MonitorState()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -40,8 +41,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController = MenuBarController(
             state: state,
             preferences: preferences,
+            updateChecker: updateChecker,
             onRefresh: { [weak self] in self?.monitor.refresh() }
         )
+
+        // Look for app updates on launch and once a day thereafter.
+        updateChecker.startAutomaticChecks()
 
         monitor.onSnapshot = { [weak self] snapshot in
             guard let self else { return }

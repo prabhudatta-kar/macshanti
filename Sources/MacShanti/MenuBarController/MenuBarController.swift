@@ -12,12 +12,14 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     private let state: MonitorState
     private let preferences: PreferenceStore
+    private let updateChecker: UpdateChecker
     private let onRefresh: () -> Void
     private var cancellable: AnyCancellable?
 
-    init(state: MonitorState, preferences: PreferenceStore, onRefresh: @escaping () -> Void) {
+    init(state: MonitorState, preferences: PreferenceStore, updateChecker: UpdateChecker, onRefresh: @escaping () -> Void) {
         self.state = state
         self.preferences = preferences
+        self.updateChecker = updateChecker
         self.onRefresh = onRefresh
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
@@ -47,6 +49,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
         let root = PopoverView(
             state: state,
+            updateChecker: updateChecker,
             onQuitApp: { [weak self] pid in self?.quitApp(pid: pid) },
             onNeverSuggest: { [weak self] name in self?.neverSuggest(name) },
             onQuitSelf: { NSApp.terminate(nil) }
